@@ -68,7 +68,7 @@ class _ChannelAttention(nn.Module):
             nn.Sigmoid()
         )
 
-    def forward(self, x):
+    def forward(self, x):  //high_level attention result * low_level downsample, have some different from paper ???
         x = self.downsample(x)
         out = self.attention(x) * x
         return out
