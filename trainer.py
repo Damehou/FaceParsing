@@ -17,6 +17,7 @@ from lr_scheduler import WarmupPolyLR
 
 from torch.utils.tensorboard import SummaryWriter
 
+#学习率函数移到trainer里，self.modle_build不写成函数，reset_grad, 加载也放到类里
 
 __BA__ = ["CE2P", "FaceParseNet18", "FaceParseNet34", "FaceParseNet50", "FaceParseNet"]
 
