@@ -50,29 +50,53 @@ class Bottleneck(nn.Module):
         return out
 
 
+# class _ChannelAttention(nn.Module):
+#     """Channel attention module"""
+
+#     def __init__(self, in_planes, out_planes=128, reduction=8):
+#         super(_ChannelAttention, self).__init__()
+#         self.downsample = nn.Sequential(
+#             nn.Conv2d(in_planes, out_planes, 1, bias=False),
+#             nn.BatchNorm2d(out_planes),
+#             nn.ReLU(inplace=True)
+#         )
+#         self.attention = nn.Sequential(
+#             nn.AdaptiveAvgPool2d(1),
+#             nn.Conv2d(out_planes, out_planes // reduction, 1, bias=False),
+#             nn.ReLU(),
+#             nn.Conv2d(out_planes // reduction, out_planes, 1, bias=False),
+#             nn.Sigmoid()
+#         )
+
+#     def forward(self, x):  #high_level attention result * low_level downsample, have some different from paper ???
+#         x = self.downsample(x)
+#         out = self.attention(x) * x
+#         return out
+
+
 class _ChannelAttention(nn.Module):
     """Channel attention module"""
 
-    def __init__(self, in_planes, out_planes=128, reduction=8):
+    def __init__(self, x1_planes, x2_planes, out_planes=128, reduction=8):
         super(_ChannelAttention, self).__init__()
         self.downsample = nn.Sequential(
-            nn.Conv2d(in_planes, out_planes, 1, bias=False),
+            nn.Conv2d(x1_planes, out_planes, 1, bias=False),
             nn.BatchNorm2d(out_planes),
             nn.ReLU(inplace=True)
         )
         self.attention = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(out_planes, out_planes // reduction, 1, bias=False),
+            nn.Conv2d(x2_planes, x2_planes // reduction, 1, bias=False),
             nn.ReLU(),
-            nn.Conv2d(out_planes // reduction, out_planes, 1, bias=False),
+            nn.Conv2d(x2_planes // reduction, out_planes, 1, bias=False),
             nn.Sigmoid()
         )
-
-    def forward(self, x):  //high_level attention result * low_level downsample, have some different from paper ???
-        x = self.downsample(x)
-        out = self.attention(x) * x
+    
+    def forward(self, x1, x2):      #low_level: x1, high_level: x2
+        x1 = self.downsample(x1)    #out_planes * h * w
+        x2 = self.attention(x2)     #out_planes * 1 * 1
+        out = x2 * x1   #对浅层通道加权，用high_level语义信息指导浅层
         return out
-
 
 class _AggregationBlock(nn.Module):
     """Local receptive field enhancement"""
@@ -141,23 +165,23 @@ class _EdgeAwareness(nn.Module):
             out_fea * 2, out_fea, kernel_size=1, padding=0, bias=True)
 
     def forward(self, x1, x2):
-        _, _, h, w = x1.size()   //stage_1 x1: h * w, stage_2 x2: (h/2) * (w/2)
+        _, _, h, w = x1.size()   #stage_1 x1: h * w, stage_2 x2: (h/2) * (w/2)
 
-        edge1_fea = self.conv1(x1)    //channel 256 --> 128
-        edge1 = self.conv4(edge1_fea) //channel 128 --> 2
-        edge2_fea = self.conv2(x2)    //channel 512 --> 128
-        edge2 = self.conv4(edge2_fea) //channel 128 --> 2
+        edge1_fea = self.conv1(x1)    #channel 256 --> 128
+        edge1 = self.conv4(edge1_fea) #channel 128 --> 2
+        edge2_fea = self.conv2(x2)    #channel 512 --> 128
+        edge2 = self.conv4(edge2_fea) #channel 128 --> 2
 
         edge2_fea = F.interpolate(edge2_fea, size=(
-            h, w), mode='bilinear', align_corners=True)  //上采样 128 * h * w
+            h, w), mode='bilinear', align_corners=True)  #上采样 128 * h * w
         edge2 = F.interpolate(edge2, size=(
-            h, w), mode='bilinear', align_corners=True)  //上采样 2 * h * w
+            h, w), mode='bilinear', align_corners=True)  #上采样 2 * h * w
 
-        edge = torch.cat([edge1, edge2], dim=1)              //两个2 * h * w拼接得到4 * h * w
-        edge_fea = torch.cat([edge1_fea, edge2_fea], dim=1)  //两个128 * h * w拼接得到256 * h * w
-        edge = self.conv5(edge)  //4 * h * w --> 2 * h * w
+        edge = torch.cat([edge1, edge2], dim=1)              #两个2 * h * w拼接得到4 * h * w
+        edge_fea = torch.cat([edge1_fea, edge2_fea], dim=1)  #两个128 * h * w拼接得到256 * h * w
+        edge = self.conv5(edge)  #4 * h * w --> 2 * h * w
 
-        return edge, edge_fea
+        return edge, edge_fea  #2 * h * w, 256 * h * w
 
 
 class ResNet(nn.Module):
@@ -225,27 +249,27 @@ class ResNet(nn.Module):
     def forward(self, x):
         _, _, h, w = x.size()
 
-        x = self.relu1(self.bn1(self.conv1(x)))
-        x = self.relu2(self.bn2(self.conv2(x)))
-        x = self.relu3(self.bn3(self.conv3(x)))
-        x = self.maxpool(x)
+        x = self.relu1(self.bn1(self.conv1(x)))  #64 * (h/2) * (w/2)
+        x = self.relu2(self.bn2(self.conv2(x)))  #64 * (h/2) * (w/2)
+        x = self.relu3(self.bn3(self.conv3(x)))  #128 * (h/2) * (w/2)
+        x = self.maxpool(x)  #128 * (h/4) * (w/4)
 
-        c2 = self.layer1(x)
-        c3 = self.layer2(c2)
-        c4 = self.layer3(c3)
+        c2 = self.layer1(x)  #256 * (h/4) * (w/4)
+        c3 = self.layer2(c2) #512 * (h/8) * (w/8)
+        c4 = self.layer3(c3) #1024 * (h/16) * (w/16)
 
         c2_a = self.c2_a(c2)  # (-1, 128, 128, 128)
         c3_a = self.c3_a(c3)  # (-1, 128,  64,  64)
         c4_a = self.c4_a(c4)  # (-1, 128,  32,  32)
 
         # Multi scale aggregation
-        c3_b = self._upsample_add(self.smooth3(c4_a), self.smooth2(c3_a))
-        c2_b = self._upsample_add(c3_b, self.smooth1(c2_a))
+        c3_b = self._upsample_add(self.smooth3(c4_a), self.smooth2(c3_a))  #扩充卷积核处理后得到(-1, 128,  32,  32)上采样与扩充卷积核处理后得到(-1, 128,  64,  64)相加 --> (-1, 128,  64,  64)
+        c2_b = self._upsample_add(c3_b, self.smooth1(c2_a)) #c3_b的shape为(-1, 128,  64,  64)上采样与最浅层经过最大扩充率的结果相加
 
-        seg1 = self.classifier1(c2_b)
-        edge, edge_fea = self.edge(c2, c3)
+        seg1 = self.classifier1(c2_b)      #粗分割
+        edge, edge_fea = self.edge(c2, c3) #2 * h * w, 256 * h * w
 
-        merge = torch.cat([c2_b, edge_fea], dim=1)
+        merge = torch.cat([c2_b, edge_fea], dim=1) #边界特征图与语义图merge后再去classifier得到分割图
         seg2 = self.classifier2(merge)
 
         return [[seg1, seg2], [edge]]
