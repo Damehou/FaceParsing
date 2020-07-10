@@ -141,21 +141,21 @@ class _EdgeAwareness(nn.Module):
             out_fea * 2, out_fea, kernel_size=1, padding=0, bias=True)
 
     def forward(self, x1, x2):
-        _, _, h, w = x1.size()
+        _, _, h, w = x1.size()   //stage_1 x1: h * w, stage_2 x2: (h/2) * (w/2)
 
-        edge1_fea = self.conv1(x1)
-        edge1 = self.conv4(edge1_fea)
-        edge2_fea = self.conv2(x2)
-        edge2 = self.conv4(edge2_fea)
+        edge1_fea = self.conv1(x1)    //channel 256 --> 128
+        edge1 = self.conv4(edge1_fea) //channel 128 --> 2
+        edge2_fea = self.conv2(x2)    //channel 512 --> 128
+        edge2 = self.conv4(edge2_fea) //channel 128 --> 2
 
         edge2_fea = F.interpolate(edge2_fea, size=(
-            h, w), mode='bilinear', align_corners=True)
+            h, w), mode='bilinear', align_corners=True)  //上采样 128 * h * w
         edge2 = F.interpolate(edge2, size=(
-            h, w), mode='bilinear', align_corners=True)
+            h, w), mode='bilinear', align_corners=True)  //上采样 2 * h * w
 
-        edge = torch.cat([edge1, edge2], dim=1)
-        edge_fea = torch.cat([edge1_fea, edge2_fea], dim=1)
-        edge = self.conv5(edge)
+        edge = torch.cat([edge1, edge2], dim=1)              //两个2 * h * w拼接得到4 * h * w
+        edge_fea = torch.cat([edge1_fea, edge2_fea], dim=1)  //两个128 * h * w拼接得到256 * h * w
+        edge = self.conv5(edge)  //4 * h * w --> 2 * h * w
 
         return edge, edge_fea
 
