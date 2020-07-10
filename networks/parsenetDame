@@ -40,76 +40,11 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
 
         return out
-
-
-# class Bottleneck(nn.Module):
-#     expansion = 4
-
-#     def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None, multi_grid=1):
-#         super(Bottleneck, self).__init__()
-#         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-#         self.bn1 = nn.BatchNorm2d(planes)
-#         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-#                                padding=dilation*multi_grid, dilation=dilation*multi_grid, bias=False)
-#         self.bn2 = nn.BatchNorm2d(planes)
-#         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-#         self.bn3 = nn.BatchNorm2d(planes * 4)
-#         self.relu = nn.ReLU(inplace=False)
-#         self.relu_inplace = nn.ReLU(inplace=True)
-#         self.downsample = downsample
-#         self.dilation = dilation
-#         self.stride = stride
-
-#     def forward(self, x):
-#         residual = x
-
-#         out = self.conv1(x)
-#         out = self.bn1(out)
-#         out = self.relu(out)
-
-#         out = self.conv2(out)
-#         out = self.bn2(out)
-#         out = self.relu(out)
-
-#         out = self.conv3(out)
-#         out = self.bn3(out)
-
-#         if self.downsample is not None:
-#             residual = self.downsample(x)
-
-#         out = out + residual
-#         out = self.relu_inplace(out)
-
-#         return out
-
-
-class _ChannelAttention(nn.Module):
-    """Channel attention module"""
-
-    def __init__(self, in_planes, out_planes=256, reduction=8):
-        super(_ChannelAttention, self).__init__()
-        self.specificdim = nn.Sequential(
-            nn.Conv2d(in_planes, out_planes, 1, bias=False),
-            nn.BatchNorm2d(out_planes),
-            nn.ReLU(inplace=True)
-        )
-        self.attention = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(out_planes, out_planes // reduction, 1, bias=False),
-            nn.ReLU(),
-            nn.Conv2d(out_planes // reduction, out_planes, 1, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        x = self.specificdim(x)
-        out = self.attention(x) * x
-        return out
         
 class _ChannelAttention(nn.Module):
     """Channel attention module"""
 
-    def __init__(self, x1_planes, x2_planes, out_planes=128, reduction=8):
+    def __init__(self, x1_planes, x2_planes, out_planes=256, reduction=8):
         super(_ChannelAttention, self).__init__()
         self.downsample = nn.Sequential(
             nn.Conv2d(x1_planes, out_planes, 1, bias=False),
@@ -238,10 +173,9 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
         # Channel Attention
-        self.c2_a = _ChannelAttention(in_planes=64)
-        self.c3_a = _ChannelAttention(in_planes=128)
-        self.c4_a = _ChannelAttention(in_planes=256)
-        self.c5_a = _ChannelAttention(in_planes=512)
+        self.c2_a = _ChannelAttention(x1_planes=64, x2_planes=128)
+        self.c3_a = _ChannelAttention(x1_planes=128, x2_planes=256)
+        self.c4_a = _ChannelAttention(x1_planes=256, x2_planes=512)
 
         self.smooth3 = _AggregationBlock(256, dilated=[1, 2, 4])
         self.smooth2 = _AggregationBlock(256, dilated=[3, 6, 9])
@@ -286,27 +220,19 @@ class ResNet(nn.Module):
         c4 = self.layer3(c3)  # (-1, 256, 32, 32)
         c5 = self.layer4(c4)  # (-1, 512, 16, 16)
 
-        '''c2_a = self.c2_a(c2)  # (-1, 128, 128, 128)
-        c3_a = self.c3_a(c3)  # (-1, 128,  64,  64)
-        c4_a = self.c4_a(c4)  # (-1, 128,  32,  32)'''
-
         # Stage Contextual Attention Mechanism (SCAM) Module
-        p5 = self.c5_a(c5)
-        p4 = self._upsample_add(p5, self.c4_a(c4))
-        p3 = self._upsample_add(p4, self.c3_a(c3))
-        p2 = self._upsample_add(p3, self.c2_a(c2))
+        p4 = self.c4_a(c4, c5)
+        p3 = self.c3_a(c3, c4)
+        p2 = self.c2_a(c2, c3)
 
         # Multi scale aggregation
-        # c3_b = self._upsample_add(self.smooth3(c4_a), self.smooth2(c3_a))
-        # c2_b = self._upsample_add(c3_b, self.smooth1(c2_a))
-
         # [Semantic Gap Compensation Block (SGCB) Module] Reason for not using P5: The global receptive field
         # may learn the noise information, which will affect the accuracy improvement.
         p4 = self.smooth3(p4)
         p3 = self._upsample_add(p4, self.smooth2(p3))
         p2 = self._upsample_add(p3, self.smooth1(p2))
 
-        # Segmentation 1
+        # Segmentation 1  coarse segmente
         seg1 = self.classifier1(p2)
 
         # Boundary-aware Branch
