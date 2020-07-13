@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
+import cv2
 import os
 import os.path as osp
 
@@ -40,8 +41,12 @@ class CelebAMaskHQ(Dataset):
         img_path, label_path = dataset[index]
 
         # Uniform image size
-        image = Image.open(img_path).convert("RGB")
-        label = Image.open(label_path).convert("L")
+        #image = Image.open(img_path).convert("RGB")
+        image = cv2.imread(img_path)
+        
+        
+        #label = Image.open(label_path).convert("L")
+        label = cv2.imread(label_path， 0)
 
         # Image resized to the same dimension
         image, label = Compose(
@@ -54,7 +59,8 @@ class CelebAMaskHQ(Dataset):
             # Convert it to pytorch style
             image = img_transform(image)
             mask = mask_transform(label)
-            edge = mask_transform(Image.fromarray(edge_contour(np.asarray(label))))
+            #edge = mask_transform(Image.fromarray(edge_contour(np.asarray(label))))
+            edge = mask_transform(cv2.fromarray(edge_contour(np.asarray(label))))
 
             return image, mask, edge
 
@@ -87,7 +93,7 @@ class CustomDataLoader:
                                                  shuffle=True,
                                                  num_workers=4,
                                                  drop_last=True,
-                                                 pin_memory=True)
+                                                 pin_memory=True) #pin_memory=True maybe need change to pin_memory=False
             return loader
 
         loader = torch.utils.data.DataLoader(dataset=dataset,
