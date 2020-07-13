@@ -27,14 +27,14 @@ class SegMetric(object):
             - fwavacc
         """
         hist = self.confusion_matrix
-        acc = np.diag(hist).sum() / hist.sum()
-        acc_cls = np.diag(hist) / hist.sum(axis=1)
-        acc_cls = np.nanmean(acc_cls)
+        acc = np.diag(hist).sum() / hist.sum()  #overall accuracy
+        acc_cls = np.diag(hist) / hist.sum(axis=1) #per class accuracy
+        acc_cls = np.nanmean(acc_cls)  #mean class accuracy
         iu = np.diag(hist) / (hist.sum(axis=1) +
-                              hist.sum(axis=0) - np.diag(hist))
-        mean_iu = np.nanmean(iu)
+                              hist.sum(axis=0) - np.diag(hist))  #per class IU
+        mean_iu = np.nanmean(iu)  #mean IU
         freq = hist.sum(axis=1) / hist.sum()
-        fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
+        fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()   #frequency weighted IU
         cls_iu = dict(zip(range(self.n_classes), iu))
 
         return (
