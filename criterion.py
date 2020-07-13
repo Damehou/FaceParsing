@@ -28,6 +28,22 @@ def cross_entropy2d(input, target, weight=None, reduction='none'):
 
     return loss
 
+class CrossEntropyLoss2d(nn.Module):
+    def __init__(self):
+        super(CrossEntropyLoss2d, self).__init__()
+        self.nll_loss = nn.NLLLoss()
+
+    def forward(self, inputs, targets):
+        n, c, h, w = input.size()
+        nt, ht, wt = target.size()
+
+        # Handle inconsistent size between input and target
+        if h != ht or w != wt:
+            input = F.interpolate(input, size=(ht, wt), mode="bilinear", align_corners=True)
+        
+        loss = self.nll_loss(F.log_softmax(inputs, dim=1), targets)
+        return loss
+
 
 def bootstrapped_cross_entropy2d(input, target, K=100000, weight=None, size_average=True):
     """High-performance semantic segmentation using very deep fully convolutional networks"""
