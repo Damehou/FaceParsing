@@ -123,11 +123,12 @@ class DiceLoss(nn.Module):
         target = self.make_one_hot(
             target.unsqueeze(dim=1), classes=output.size()[1])
         output = F.softmax(output, dim=1)
-        output_flat = output.contiguous().view(-1)
-        target_flat = target.contiguous().view(-1)
-        intersection = (output_flat * target_flat).sum()
-        loss = 1 - ((2. * intersection + self.smooth) /
-                    (output_flat.sum() + target_flat.sum() + self.smooth))
+#         output_flat = output.contiguous().view(-1)
+#         target_flat = target.contiguous().view(-1)
+#         intersection = (output_flat * target_flat).sum()
+        intersection = (output * target).sum()
+#         loss = 1 - ((2. * intersection + self.smooth) / (output_flat.sum() + target_flat.sum() + self.smooth))
+        loss = 1 - ((2. * intersection + self.smooth) / (output.sum() + target.sum() + self.smooth))
         return loss
 
 
