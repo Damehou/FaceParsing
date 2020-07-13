@@ -52,12 +52,12 @@ class Colorize(object):
         self.cmap = torch.from_numpy(self.cmap[:n])
 
     def __call__(self, gray_image):
-        size = gray_image.size()
+        size = gray_image.size()  #单通道灰度图，值是分类的类别[0, n - 1]
         color_image = torch.ByteTensor(3, size[1], size[2]).fill_(0)
 
         for label in range(0, len(self.cmap)):
-            mask = (label == gray_image[0]).cpu()
-            color_image[0][mask] = self.cmap[label][0]
+            mask = (label == gray_image[0]).cpu() #二维矩阵上的值为label则mask对应的值为true或1
+            color_image[0][mask] = self.cmap[label][0] #给分为一类的点上色
             color_image[1][mask] = self.cmap[label][1]
             color_image[2][mask] = self.cmap[label][2]
 
