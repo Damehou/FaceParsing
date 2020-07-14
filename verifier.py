@@ -37,7 +37,7 @@ class Verifier(object):
                     outputs = outputs[0][-1]
 
                 outputs = F.interpolate(outputs, (h, w), mode='bilinear', align_corners=True)
-                pred = outputs.data.max(1)[1].cpu().numpy()  # Matrix index
+                pred = outputs.data.max(1)[1].cpu().numpy()  # Matrix index 取出最大的数和对应的下标
                 gt = labels.cpu().numpy()
                 metrics.update(gt, pred)
 
