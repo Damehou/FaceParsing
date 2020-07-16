@@ -55,4 +55,4 @@ def get_parameters():
     parser.add_argument('--sample_step', type=int, default=200)
     parser.add_argument('--tb_step', type=int, default=100)
 
-    return parser.parse_args()
+    return parser.parse_args()  #parser.parse_args('--arch', 'FaceParseNet18')
